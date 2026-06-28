@@ -19,11 +19,7 @@ DATA_DIR = "Data"
 RESULTS_DIR = "results"
 FIXED_PATH = os.path.join(DATA_DIR, "case6_gre1.nrrd")
 MOVING_PATH = os.path.join(DATA_DIR, "case6_gre2.nrrd")
-THRESHOLD_FIXED  = 700
-THRESHOLD_MOVING = 560
 REGISTRATION_METHOD = "rigid"
-
-# Seed points
 SEED_FIXED  = (90, 80, 47)
 SEED_MOVING = (90, 80, 47)
 
@@ -43,9 +39,9 @@ def run_registration(fixed, moving):
 
 
 def run_segmentation(fixed, registered_moving):
-    print("\n[2/4] Segmentation des tumeurs...")
-    mask_fixed  = segment_tumor(fixed,             seed=SEED_FIXED,  lower_threshold=THRESHOLD_FIXED)
-    mask_moving = segment_tumor(registered_moving, seed=SEED_MOVING, lower_threshold=THRESHOLD_MOVING)
+    print("\n[2/4] Segmentation des tumeurs (méthode : Otsu 2 étapes + composante connexe)...")
+    mask_fixed  = segment_tumor(fixed,             seed=SEED_FIXED)
+    mask_moving = segment_tumor(registered_moving, seed=SEED_MOVING)
 
     n1 = count_voxels(mask_fixed)
     n2 = count_voxels(mask_moving)
