@@ -9,25 +9,23 @@ from src.registration import (
     resample,
     compute_quality_metrics,
 )
-# from src.segmentation import segment_tumor
-# from src.analysis import compare_tumors
-# from src.visualization import display_comparison
+from src.segmentation import segment_tumor, save_mask, count_voxels, voxel_volume_mm3
+from src.analysis import compare_tumors, print_report
+from src.visualization import display_comparison
+from src.figures import fig_slices_grid
 
 
 DATA_DIR = "Data"
 RESULTS_DIR = "results"
 FIXED_PATH = os.path.join(DATA_DIR, "case6_gre1.nrrd")
 MOVING_PATH = os.path.join(DATA_DIR, "case6_gre2.nrrd")
-
-# Paramètres retenus après l'exploration menée dans exploration/
-# (voir report/rapport.pdf, section "Méthodologie" pour la justification).
+THRESHOLD_FIXED  = 700
+THRESHOLD_MOVING = 560
 REGISTRATION_METHOD = "rigid"
 
-# # Seed points pour la segmentation semi-automatique (region growing),
-# # déterminés manuellement par inspection visuelle des volumes - voir
-# # exploration/exploration_segmentation.ipynb pour la démarche.
-# SEED_FIXED = (128, 128, 90)   # TODO: ajuster aux vraies coordonnées de la tumeur
-# SEED_MOVING = (128, 128, 90)  # idem, dans le volume recalé
+# Seed points
+SEED_FIXED  = (90, 80, 47)
+SEED_MOVING = (90, 80, 47)
 
 
 def run_registration(fixed, moving):
@@ -44,27 +42,48 @@ def run_registration(fixed, moving):
     return registered
 
 
-# def run_segmentation(fixed, registered_moving):
-#     print("\n[2/4] Segmentation des tumeurs...")
-#     mask_fixed = segment_tumor(fixed, seed=SEED_FIXED)
-#     mask_moving = segment_tumor(registered_moving, seed=SEED_MOVING)
+def run_segmentation(fixed, registered_moving):
+    print("\n[2/4] Segmentation des tumeurs...")
+    mask_fixed  = segment_tumor(fixed,             seed=SEED_FIXED,  lower_threshold=THRESHOLD_FIXED)
+    mask_moving = segment_tumor(registered_moving, seed=SEED_MOVING, lower_threshold=THRESHOLD_MOVING)
 
-#     save_image(mask_fixed, os.path.join(RESULTS_DIR, "mask_t1.nrrd"))
-#     save_image(mask_moving, os.path.join(RESULTS_DIR, "mask_t2.nrrd"))
-#     return mask_fixed, mask_moving
+    n1 = count_voxels(mask_fixed)
+    n2 = count_voxels(mask_moving)
+    vox_vol = voxel_volume_mm3(mask_fixed)
+    print(f"   -> T1 : {n1} voxels ({n1 * vox_vol:.0f} mm³)")
+    print(f"   -> T2 : {n2} voxels ({n2 * vox_vol:.0f} mm³)")
 
-
-# def run_analysis(mask_fixed, mask_moving):
-#     print("\n[3/4] Analyse des changements...")
-#     report = compare_tumors(mask_fixed, mask_moving)
-#     for key, value in report.items():
-#         print(f"   - {key}: {value}")
-#     return report
+    save_mask(mask_fixed, os.path.join(RESULTS_DIR, "mask_t1.nrrd"))
+    save_mask(mask_moving, os.path.join(RESULTS_DIR, "mask_t2.nrrd"))
+    return mask_fixed, mask_moving
 
 
-# def run_visualization(fixed, registered_moving, mask_fixed, mask_moving):
-#     print("\n[4/4] Visualisation (fenêtre interactive VTK)...")
-#     display_comparison(fixed, registered_moving, mask_fixed, mask_moving)
+def run_analysis(fixed, registered_moving, mask_fixed, mask_moving):
+    print("\n[3/4] Analyse des changements...")
+    metrics = compare_tumors(fixed, registered_moving, mask_fixed, mask_moving)
+    print_report(metrics)
+    return metrics
+
+
+def run_visualisation(fixed, registered_moving, mask_fixed, mask_moving):
+    print("\n[4/4] Visualisation...")
+
+    print("   [4a] Figures matplotlib...")
+    fig_slices_grid(
+        image_t1=fixed,
+        image_t2=registered_moving,
+        mask_t1=mask_fixed,
+        mask_t2=mask_moving,
+        output_path=os.path.join(RESULTS_DIR, "fig_slices_grid.png"),
+        y_center=SEED_FIXED[1],
+    )
+
+    print("   [4b] Visualisation 3D (fenêtre interactive VTK)...")
+    display_comparison(
+        fixed_path=FIXED_PATH,
+        mask_t1_path=os.path.join(RESULTS_DIR, "mask_t1.nrrd"),
+        mask_t2_path=os.path.join(RESULTS_DIR, "mask_t2.nrrd"),
+    )
 
 
 def main():
@@ -75,9 +94,9 @@ def main():
     moving = load_image(MOVING_PATH)
 
     registered = run_registration(fixed, moving)
-    # mask_fixed, mask_moving = run_segmentation(fixed, registered)
-    # run_analysis(mask_fixed, mask_moving)
-    # run_visualization(fixed, registered, mask_fixed, mask_moving)
+    mask_fixed, mask_moving = run_segmentation(fixed, registered)
+    metrics = run_analysis(fixed, registered, mask_fixed, mask_moving)
+    run_visualisation(fixed, registered, mask_fixed, mask_moving)
 
 
 if __name__ == "__main__":
